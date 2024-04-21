@@ -1,0 +1,13 @@
+*** NGROK ***
+- Register ngrok
+- download as per OS after download extract and copy to the folder where node app folder situated
+- Copy and run the command to add your authtoken to the default ngrok.yml in cmd or terminal at node folder available
+- After run command, check ngrok help
+- Run command ngrok http 3000
+- Copy forwarding command and run in browser (https://6cf8-2409-4085-2d4d-207e.ngrok-free.app). You will be connect to the local server
+- `http://api.telegram.org/bot{MY_TOKEN}/{METHOD}`
+    - Copy MY_ TOKEN from `BotFather` from Telegram 
+    - Replace METHOD with method setWebhook?url=https://6cf8-2409-4085-2d4d-207e.ngrok-free
+    -  => `http://api.telegram.org/bot6968905012:AAFQZB4BdKsIoHS9JjlNEW4ZKRTe42U-1dM/setWebhook?url=https://6cf8-2409-4085-2d4d-207e.ngrok-free`
+    - Run this url in postman and bot will successfully updated
+    - 
