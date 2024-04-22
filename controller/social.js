@@ -24,12 +24,21 @@ exports.addUserSMO = async function (req, res) {
     
     if (requestData == undefined) {
         res.status(400);
-        res.json({
-        replyMsg: LANGTEXT.REQUIRED_DATA,
-        replyCode: 'error',
-        });
+        res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
     } else {
         if(requestData.acc_type === '1'){
+            if (!requestData.app_Id || requestData.app_Id === '') {
+                res.status(400);
+                res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
+            }
+            else if (!requestData.app_Secret || requestData.app_Secret === '') {
+                res.status(400);
+                res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
+            }            
+            else if (!requestData.redirect_uri || requestData.redirect_uri === '') {
+                res.status(400);
+                res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
+            }
             const appId = 'YOUR_APP_ID';
             const appSecret = 'YOUR_APP_SECRET';
             const redirectUri = 'YOUR_REDIRECT_URI';
@@ -40,7 +49,7 @@ exports.addUserSMO = async function (req, res) {
                 const userAccessToken = response.data.access_token;
                 console.log(userAccessToken);
 
-                const pageId = req.body.pageId;
+                const pageId = req.body.page_Id;
 
                 axios.get(`https://graph.facebook.com/${pageId}?fields=access_token&access_token=${userAccessToken}`)
                 .then((response) => {
@@ -114,7 +123,7 @@ exports.addUserSMO = async function (req, res) {
         
             try {
                 const imageBuffer = await get({
-                    url: 'https://assets.vogue.in/photos/5ce41ea8b803113d138f5cd2/2:3/w_1600,c_limit/Jaipur-Travel-Shopping-Restaurants.jpg',
+                    url: 'IMAGE_URL',
                     encoding: null, 
                 });
             
@@ -160,24 +169,16 @@ exports.deletePost = async function (req, res) {
             axios.delete(`https://graph.facebook.com/v19.0/${page_post_id}`)
             .then((response) => {
                 if(response.success){
-                    UserSMOSettings.deleteOne(requestData.page_post_id)
+                    UserSMOSettings.update({status: '2'}, { where: { id: requestData.id }})
                     .then(data => {
                         console.log(data)
                         res.status(201);
                         res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
                     })
                     .catch(err => {
-
                         console.log("Error===", err);
-
-                        var errorMessage = err.errors;
-                        var errorITem = [];
-                        errorMessage.forEach((item) => {
-                        console.log('ID: ' + item.message);
-                        errorITem.push({ "field": item.path, "message": item.message });
-                        });
                         res.status(400);
-                        res.json({ replyCode: 'error', replyMsg: errorITem });
+                        res.json({ replyCode: 'error', replyMsg: err.message });
 
                     });
                 }
@@ -196,7 +197,7 @@ exports.deletePost = async function (req, res) {
                 await ig.media.delete({ mediaId: media.pk });
                 console.log('Post deleted successfully.');
     
-                UserSMOSettings.deleteOne(requestData.postId)
+                UserSMOSettings.update({status: '2'}, { where: { id: requestData.id }})
                 .then(data => {
                     console.log(data)
                     res.status(201);
