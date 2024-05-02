@@ -1,4 +1,284 @@
 
+exports.instantPostOnSocialMedia = async function (req, res) {
+    var requestData = req.body;
+    console.log(typeof requestData.acc_type);
+    var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
+
+    await FUNCTIONS.DATA_WRITE(req);
+    //console.log(requestData);
+    const userSettingsObj = {}
+    if (requestData == undefined) {
+        res.status(400);
+        res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
+    } else {
+        try{
+            if (!userdetails || !userdetails.id) {
+                res.status(400);
+                res.json({
+                  replyCode: "error",
+                  replyMsg: LANGTEXT.USERNOTFOUND,
+                })
+              } else {
+                if(requestData.acc_type === 1){
+                    const appId = 'YOUR_APP_ID';
+                    const appSecret = 'YOUR_APP_SECRET';
+                    const redirectUri = 'YOUR_REDIRECT_URI';
+                    const code = 'CODE_RECEIVED_FROM_FACEBOOK';
+                    
+                    await axios.get(`https://graph.facebook.com/v13.0/oauth/access_token?client_id=${appId}&redirect_uri=${redirectUri}&client_secret=${appSecret}&code=${code}`)
+                    .then(async (userAccessTokenResponse) => {
+                        const userAccessToken = userAccessTokenResponse.data.access_token;
+                        console.log(userAccessToken);
+
+                        const pageId = req.body.page_Id;
+
+                        await axios.get(`https://graph.facebook.com/${pageId}?fields=access_token&access_token=${userAccessToken}`)
+                        .then(async (pageAccessTokenResponse) => {
+                            const pageAccessToken = pageAccessTokenResponse.data.access_token;
+                            let fbSMOSettingObj = {
+                                code : code,
+                                userAccessToken : userAccessToken,
+                                pageAccessToken : pageAccessToken
+                            }
+                            let fbSMOPostObj = {
+                                caption : req.body.caption,
+                                user_id: req.body.user_id,
+                                page_id: req.body.page_id,
+                                post_type : req.body.post_type,
+                                status: 1,
+                            }
+
+                            let mediaObj = {
+                                access_token: pageAccessToken
+                            }
+
+                            let mediaSource = ''
+                            if(req.body.videoUrl){
+                                mediaSource = 'videos'
+                                
+                                mediaObj.file_url = req.body.videoUrl
+                                fbSMOPostObj.video = req.body.videoUrl
+                                if(req.body.caption) {
+                                    mediaObj.description = req.body.caption
+                                }
+                            } else if(req.body.image){
+                                mediaSource = 'photos'
+                                mediaObj.url = req.body.image;
+                                fbSMOPostObj = req.body.image;
+                                if(req.body.caption) {
+                                    mediaObj.caption = req.body.caption
+                                }
+                            } else {
+                                mediaObj.message = req.body.caption
+                                mediaSource = 'feed'
+                            }
+                            fbSMOPostObj.mediaSource = mediaSource;
+                            await axios.post(`https://graph.facebook.com/v19.0/246095668596270/${mediaSource}`, mediaObj)
+                            .then(async function (postResponse) {
+                                if (postResponse) {
+                                    try {
+                                        await UserSMOSettings.update({appId:appId},fbSMOSettingObj)
+                                        if(SettingResult){
+                                            try {
+                                                await UserSMOPost.create(fbSMOPostObj)
+                                                res.status(201);
+                                                res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });                                    
+                                            } catch (error) {
+                                                var errorMessage = error.errors;
+                                                var errorITem = [];
+                                                errorMessage.forEach((item) => {
+                                                    console.log('ID: ' + item.message);
+                                                    errorITem.push({ "field": item.path, "message": item.message });
+                                                });
+                                                res.status(400);
+                                                res.json({ replyCode: 'error', replyMsg: errorITem });
+                                            }
+                                        }
+                                    } catch (error) {
+                                        var errorMessage = error.errors;
+                                        var errorITem = [];
+                                        errorMessage.forEach((item) => {
+                                            console.log('ID: ' + item.message);
+                                            errorITem.push({ "field": item.path, "message": item.message });
+                                        });
+                                        res.status(400);
+                                        res.json({ replyCode: 'error', replyMsg: errorITem });
+                                    }
+                                } else {
+                                    res.status(500);
+                                    res.json({ replyCode: 'error', replyMsg: "something went wrong" });
+                                }
+                            })
+                            .catch(function (error) {
+                                var errorMessage = error.errors;
+                                var errorITem = [];
+                                errorMessage.forEach((item) => {
+                                    console.log('ID: ' + item.message);
+                                    errorITem.push({ "field": item.path, "message": item.message });
+                                });
+                                res.status(400);
+                                res.json({ replyCode: 'error', replyMsg: errorITem });
+                            });
+
+                            // res.status(200).json({pageAccessToken: pageAccessToken});
+                        })
+                        .catch((error) => {
+                            var errorMessage = error.errors;
+                            var errorITem = [];
+                            errorMessage.forEach((item) => {
+                                console.log('ID: ' + item.message);
+                                errorITem.push({ "field": item.path, "message": item.message });
+                            });
+                            res.status(400);
+                            res.json({ replyCode: 'error', replyMsg: errorITem });
+                        });
+                    })
+                    .catch((error) => {
+                        var errorMessage = error.errors;
+                        var errorITem = [];
+                        errorMessage.forEach((item) => {
+                            console.log('ID: ' + item.message);
+                            errorITem.push({ "field": item.path, "message": item.message });
+                        });
+                        res.status(400);
+                        res.json({ replyCode: 'error', replyMsg: errorITem });
+                    });
+                } else if (requestData.acc_type === '2') {
+                    console.log("hereeeeee");
+                    UserSMOSettings.findOne({where:{status:1,user_id:userdetails.id},
+                        attributes: ['insta_username', 'insta_password']}).then(async data => {
+                        try {
+                            const ig = new IgApiClient();
+                            ig.state.generateDevice(data.insta_username);
+                            ig.account.login(data.insta_username, data.insta_password).then(async () => {
+                                let filePath = env.IMAGEBASEPATH + 'uploads/smo/Facebook-image-sizes.jpg';
+
+                                //Check Type of File
+                                const mimeType = mime.lookup(filePath);
+                                const filetype = mimeType.split('/')
+                                console.log(filetype[0]); 
+                                let mediaSource = 'photo'
+                                if(filetype[0] === 'video'){
+                                    mediaSource = 'video'
+                                    instaSMOPostObj.video = filetype[0]
+                                } else if(filetype[0] === 'image'){
+                                    mediaSource = 'photo'
+                                    instaSMOPostObj = filetype[0];
+                                }
+                                instaSMOPostObj.mediaSource = mediaSource;
+                                // console.log(instaSMOPostObj);
+                                let width = 1080;
+                                let height = 566;
+                                if(mediaSource === 'photo'){
+                                    //Check Image size
+                                    const dimensions = sizeOf(filePath)
+                                    const imageSize = `${dimensions.width}x${dimensions.height}`;
+                                    const standardImageSize = ['1080x1080','1080x566', '566x1080']
+                                    if(!standardImageSize.includes(imageSize)){
+                                        //Resize Image                                        
+                                        if(dimensions.width > dimensions.height){
+                                            width = 1080;
+                                            height = 566;
+                                        } else if (dimensions.width < dimensions.height){
+                                            width = 1080;
+                                            height = 566;
+                                        }
+                                        console.log(width, height);
+
+                                        const storage = multer.memoryStorage();
+                                        const upload = multer({ storage: storage }).single('image');
+                            
+                                        upload(req, res, async (err) => {
+                                            if (err) {
+                                                console.error(err);
+                                                return res.status(500).send('Error uploading file');
+                                            }
+                            
+                                            // Resize the uploaded image using Jipm
+                                            const images = await Jimp.read(filePath);
+                                            images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
+                                                if (errs) {
+                                                    res.status(400);
+                                                    res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
+                                                }
+                                            }).write(env.IMAGEBASEPATH + 'uploads/smo/resized-'+ Date.now() + '-' + originalFileName);
+                                            filePath = env.IMAGEBASEPATH + 'uploads/smo/'+ 'resized-' + Date.now() + '-' + originalFileName;
+                                            console.log("new File Path====>", filePath);
+                                        });
+                                    }
+                                }
+                                let instaSMOPostObj = {
+                                    caption : req.body.caption,
+                                    user_id: userdetails.id,
+                                    post_type : req.body.post_type,
+                                    status: 1,
+                                }
+
+                                const imageBuffer = fs.readFileSync(filePath);
+                                let sourceObj = {
+                                    caption: requestData.caption,
+                                    uploadOptions: {
+                                        // Set the size for landscape posts (1080x566)
+                                        width: width,
+                                        height: height,
+                                        isSidecar: false
+                                    }
+                                }
+
+                                if(mediaSource === 'photo') {
+                                    sourceObj.file = imageBuffer;
+                                    const publishResult = await ig.publish.photo(sourceObj);
+                                    console.log('Post published:', publishResult);
+                                } else if(mediaSource === 'video') {
+                                    sourceObj.video = imageBuffer;
+                                    const publishResult = await ig.publish.video(sourceObj);
+                                    console.log('Post published:', publishResult);
+                                }
+                                instaSMOPostObj.post_id = publishResult.media.id;
+                                
+                                try {
+                                    await UserSMOPost.create(instaSMOPostObj)
+                                    // console.log(newUserPost);
+                                    res.status(201);
+                                    res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
+                                } catch (error) {
+                                    res.status(400);
+                                    res.json({ replyCode: 'error', replyMsg: error.message });
+                                }
+                            }).catch ((error) =>{
+                                res.status(400);
+                                res.json({ replyCode: 'error', replyMsg: error.message });
+                            }) 
+                        } catch (error) {
+                            res.status(400);
+                            res.json({ replyCode: 'error', replyMsg: error.message });
+                        }
+                    }).catch(err => {
+                        res.status(400);
+                        res.json({
+                            replyCode: 'error',
+                            replyMsg:LANGTEXT.DATABASECONNECTIONERROR
+                        });  
+                    });                    
+                }
+            }
+        } catch(error) {
+            SaveError.create({
+                user_id: userdetails.id,
+                file: 'controller/user_smo.js',
+                api: '***instantPostOnSocialMedia***',
+                source: 'admin',
+                err: error.toString(),
+                resolved: 0
+            })
+            res.status(500);
+            res.json({
+                replyCode: 'error',
+                replyMsg: LANGTEXT.DATABASECONNECTIONERROR,
+            });
+        }
+    }
+}
 exports.scheduledPostOnSocialMedia = async function (req, res) {
     var requestData = req.body;
     console.log(typeof requestData.acc_type);
