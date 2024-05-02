@@ -1,0 +1,205 @@
+
+exports.scheduledPostOnSocialMedia = async function (req, res) {
+    var requestData = req.body;
+    console.log(typeof requestData.acc_type);
+    var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
+
+    await FUNCTIONS.DATA_WRITE(req);
+    const userSettingsObj = {}
+    if (requestData == undefined) {
+        res.status(400);
+        res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
+    } else {
+        try{
+            if (!userdetails || !userdetails.id) {
+                res.status(400);
+                res.json({
+                  replyCode: "error",
+                  replyMsg: LANGTEXT.USERNOTFOUND,
+                })
+              } else {
+                if (requestData.acc_type === '2') {
+                    UserSMOSettings.findOne({where:{status:1,user_id:userdetails.id},
+                        attributes: ['insta_username', 'insta_password']}).then(async data => {
+                        try {
+                            let instaSMOPostObj = {
+                                caption : requestData.caption,
+                                user_id: userdetails.id,
+                                post_type : requestData.post_type,
+                                is_posted: 0,
+                                schedle_date: requestData.schedule_date,
+                                schedule_time: requestData.schedule_time
+                            }
+                            if(req.files.file != 'undefined' && req.files.file != "" && req.files.file != null && req.files.file.name != '') {
+                                const filePath = req.files.file.path;
+                                const mimeType = req.files.file.type
+                                const filetype = mimeType.split('/')
+                                console.log("mimeType===",filetype[0]);
+                                
+                                
+                                instaSMOPostObj.mediaSource = filetype[0];
+                                //Resize Image
+                                let width;
+                                let height;
+                                if(filetype[0] === 'image'){
+                                    //Check Image size
+                                    const dimensions = sizeOf(filePath)
+                                    console.log(dimensions)
+                                    const imageSize = `${dimensions.width}x${dimensions.height}`;
+                                    const standardImageSize = ['1080x1080','1080x566', '566x1080']
+                                    
+                                    if(!standardImageSize.includes(imageSize)){
+                                        if(dimensions.width > dimensions.height){
+                                            width = 1080;
+                                            height = 566;
+                                        } else if (dimensions.width < dimensions.height){
+                                            width = 1080;
+                                            height = 566;
+                                        }
+                                    }
+                                }
+                                const filenamesave = FUNCTIONS.uploadImageWithoutCallback(req.files.file, env.SOCIALIMAGEUPLAODPATH);
+                                if (filenamesave[1]) {
+                                  userErrorMessage = filenamesave[1];
+                                  userErrorStatus = true;
+                                } else {
+                                    requestData.image = 
+                                    instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
+                                    const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
+                                    const images = await Jimp.read(file_Path);                                    
+                                    images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
+                                        if (errs) {
+                                            res.status(400);    
+                                            res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
+                                        }
+                                    }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
+                                    fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
+                                }
+                            }
+                            
+                            // console.log('instaSMOPostObj*****', instaSMOPostObj)
+                            try {
+                                await UserSMOPost.create(instaSMOPostObj)
+                                res.status(201);
+                                res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
+                            } catch (error) {
+                                res.status(400);
+                                res.json({ replyCode: 'error', replyMsg: error.message });
+                            }                            
+                        } catch (error) {
+                            res.status(400);
+                            res.json({ replyCode: 'error', replyMsg: error.message });
+                        }
+                    }).catch(err => {
+                        res.status(400);
+                        res.json({
+                            replyCode: 'error',
+                            replyMsg:LANGTEXT.DATABASECONNECTIONERROR
+                        });  
+                    });                    
+                }
+            }
+        } catch(error) {
+            SaveError.create({
+                user_id: userdetails.id,
+                file: 'controller/user_smo.js',
+                api: '***scheduledPostOnSocialMedia***',
+                source: 'admin',
+                err: error.toString(),
+                resolved: 0
+            })
+            res.status(500);
+            res.json({
+                replyCode: 'error',
+                replyMsg: LANGTEXT.DATABASECONNECTIONERROR,
+            });
+        }
+    }
+}
+
+exports.smoPostCron = async function (req, res) {
+    try {
+        const credentialsPost = await UserSMOSettings.findAll({
+            where: { status: 1 },
+            attributes: ['user_id','insta_password', 'insta_username']
+        })
+        async.eachSeries(credentialsPost, async function (val, cb) {
+            console.log("credentialsPost.user_id", val.user_id);
+            const scheduledPost = await UserSMOPost.findAll({where: {is_posted: 0 }})
+            async.eachSeries(scheduledPost, async function (postValue, cb2) {
+                console.log("postValue.user_id", postValue.user_id);
+
+                if(postValue.media_file) {
+                    console.log(env.IMAGEBASEPATH + 'smo/' + postValue.media_file);
+                    // const data = fs.readFileSync(env.IMAGEBASEPATH + 'smo/' + val.media_file, { encoding: 'utf8', flag: 'r' });
+                    // console.log(data);
+                    console.log('hereeeee1111111', val.insta_username);
+                    try{
+                        const ig = new IgApiClient();
+                        ig.state.generateDevice(val.insta_username);
+                        console.log('hereeeee');
+                        await ig.account.login(val.insta_username, val.insta_password).then(async (dataA) => {
+                            let filePath = env.IMAGEBASEPATH + 'smo/' + postValue.media_file;
+                            const imageBuffer = fs.readFileSync(filePath);
+                            const dimensions = sizeOf(filePath)
+                            let sourceObj = {
+                                uploadOptions: {
+                                    width: dimensions.width,
+                                    height: dimensions.height,
+                                    isSidecar: false
+                                }
+                            }
+                            if(postValue.caption){
+                                sourceObj.caption = postValue.caption
+                            }
+                            
+                            let instaSMOPostObj = {};
+                            instaSMOPostObj.mediaSource = postValue.mediaSource;
+                            let publishResult;
+                            if(postValue.mediaSource === 'image') {
+                                sourceObj.file = imageBuffer;
+                                publishResult = await ig.publish.photo(sourceObj);
+                                console.log('Post published:', publishResult);
+                            } else if(postValue.mediaSource === 'video') {
+                                sourceObj.video = imageBuffer;
+                                publishResult = await ig.publish.video(sourceObj);
+                                console.log('Post published:', publishResult);
+                            }
+                            instaSMOPostObj.post_id = publishResult.media.id;
+                            instaSMOPostObj.is_posted = 1;
+                            
+                            try {
+                                UserSMOPost.update(instaSMOPostObj, { where: { id: postValue.id }})
+                            } catch (error) {
+                                cb2;
+                            }
+                        }).catch ((error) =>{
+                            console.log(error)
+                            cb2;
+                        })
+                    } catch(error) {
+                        res.status(400);
+                        res.json({ replyCode: 'error', replyMsg: error.message });
+                    }
+                }
+            }, async function (error, result) {
+                if (error) {
+                    cb;
+                } else {
+                    cb;
+                }
+            });
+        }, async function (error, result) {
+            if (error) {
+              res.status(400);
+              res.json({ replyCode: 'error', replyMsg: error });
+            } else {
+                res.status(201);
+                res.json({ replyMsg: 'Successfully Posted!', replyCode: 'success' });
+            }
+        });
+    } catch (error) {
+        res.status(400);
+        res.json({ replyCode: 'error', replyMsg: error.message });
+    }
+}
