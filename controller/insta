@@ -1,7 +1,5 @@
-
 exports.instantPostOnSocialMedia = async function (req, res) {
     var requestData = req.body;
-    console.log(typeof requestData.acc_type);
     var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
 
     await FUNCTIONS.DATA_WRITE(req);
@@ -156,13 +154,14 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                             ig.state.generateDevice(data.insta_username);
                             ig.account.login(data.insta_username, data.insta_password).then(async () => {
                                 
-                                let sourceObj; 
+                                let sourceObj;
+                                let publishResult;
                                 if(req.files.file != 'undefined' && req.files.file != "" && req.files.file != null && req.files.file.name != '') {
+                                    // const returnFileData = fileOperation(req.files)
+                                    // instaSMOPostObj.mediaSource = returnFileData.mediaSource
                                     const filePath = req.files.file.path;
                                     const mimeType = req.files.file.type
                                     const filetype = mimeType.split('/')
-                                    console.log("mimeType===",filetype[0]);
-                                    
                                     
                                     instaSMOPostObj.mediaSource = filetype[0];
                                     //Resize Image
@@ -187,10 +186,11 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                                     }
                                     filenamesave = FUNCTIONS.uploadImageWithoutCallback(req.files.file, env.SOCIALIMAGEUPLAODPATH);
                                     if (filenamesave[1]) {
-                                      userErrorMessage = filenamesave[1];
-                                      userErrorStatus = true;
-                                    } else {
-                                        requestData.image = 
+                                        userErrorMessage = filenamesave[1];
+                                        // userErrorStatus = true;
+                                        res.status(400);
+                                        res.json({ replyCode: 'error', replyMsg: userErrorMessage });
+                                    } else { 
                                         instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
                                         const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
                                         const images = await Jimp.read(file_Path);                                    
@@ -202,37 +202,45 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                                         }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
                                         fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
                                     }
-                                    const imageBuffer = fs.readFileSync(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
-                                    const dimensions = sizeOf(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0])
-                                    sourceObj = {
+                                    const newFilePath = env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]
+
+                                    // const instaFilePost = instaFilePostFunc(newFilePath)
+                                    
+                                    const imageBuffer = fs.readFileSync(newFilePath);
+                                    let sourceObj = {
                                         uploadOptions: {
-                                            width: dimensions.width,
-                                            height: dimensions.height,
                                             isSidecar: false
                                         }
                                     }
-                                }
-                                
-
-                                
-
-
-                                let publishResult;
-                                if(instaSMOPostObj.mediaSource){
-                                    if(instaSMOPostObj.mediaSource === 'image') {
+                                    if(postValue.mediaSource === 'image') {
+                                        const dimensions = sizeOf(newFilePath)
+                                        sourceObj.uploadOptions.width = dimensions.width;
+                                        sourceObj.uploadOptions.height = dimensions.height;
                                         sourceObj.file = imageBuffer;
+                                        if(postValue.caption){
+                                            sourceObj.caption = postValue.caption
+                                        }
                                         publishResult = await ig.publish.photo(sourceObj);
                                         console.log('Post published:', publishResult);
-                                    } else if(instaSMOPostObj.mediaSource === 'video') {
+                                    } else if(postValue.mediaSource === 'video') {
+                                        sourceObj.uploadOptions.width = 1080;
+                                        sourceObj.uploadOptions.height = 566;
                                         sourceObj.video = imageBuffer;
+                                        if(postValue.caption){
+                                            sourceObj.caption = postValue.caption
+                                        }
                                         publishResult = await ig.publish.video(sourceObj);
                                         console.log('Post published:', publishResult);
-                                    } 
+                                    }
                                 } else if(instaSMOPostObj.caption){
                                     publishResult = await ig.publish.caption(instaSMOPostObj.caption);
+                                    console.log('Post Caption published response :', publishResult);
                                 }
-                                if(publishResult.media && publishResult.media.id){
+
+                                if(publishResult && publishResult.media && publishResult.media.id){
                                     instaSMOPostObj.post_id = publishResult.media.id;
+                                    instaSMOPostObj.is_posted = 1;
+                                    instaSMOPostObj.status = 1;
                                 } else {
                                     res.status(400);
                                     res.json({ replyCode: 'error', replyMsg: "Cannot be post at the moment, please try after some time" });
@@ -259,8 +267,8 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                         res.json({
                             replyCode: 'error',
                             replyMsg:LANGTEXT.DATABASECONNECTIONERROR
-                        });  
-                    });                    
+                        });
+                    });       
                 }
             }
         } catch(error) {
@@ -282,7 +290,6 @@ exports.instantPostOnSocialMedia = async function (req, res) {
 }
 exports.scheduledPostOnSocialMedia = async function (req, res) {
     var requestData = req.body;
-    console.log(typeof requestData.acc_type);
     var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
 
     await FUNCTIONS.DATA_WRITE(req);
@@ -312,6 +319,9 @@ exports.scheduledPostOnSocialMedia = async function (req, res) {
                                 schedule_time: requestData.schedule_time
                             }
                             if(req.files.file != 'undefined' && req.files.file != "" && req.files.file != null && req.files.file.name != '') {
+                                // const returnFileData = fileOperation(req.files)
+                                // instaSMOPostObj.mediaSource = returnFileData.mediaSource
+
                                 const filePath = req.files.file.path;
                                 const mimeType = req.files.file.type
                                 const filetype = mimeType.split('/')
@@ -341,10 +351,11 @@ exports.scheduledPostOnSocialMedia = async function (req, res) {
                                 }
                                 const filenamesave = FUNCTIONS.uploadImageWithoutCallback(req.files.file, env.SOCIALIMAGEUPLAODPATH);
                                 if (filenamesave[1]) {
-                                  userErrorMessage = filenamesave[1];
-                                  userErrorStatus = true;
+                                    userErrorMessage = filenamesave[1];
+                                    // userErrorStatus = true;
+                                    res.status(400);
+                                    res.json({ replyCode: 'error', replyMsg: userErrorMessage });
                                 } else {
-                                    requestData.image = 
                                     instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
                                     const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
                                     const images = await Jimp.read(file_Path);                                    
@@ -404,79 +415,191 @@ exports.smoPostCron = async function (req, res) {
             where: { status: 1 },
             attributes: ['user_id','insta_password', 'insta_username']
         })
-        async.eachSeries(credentialsPost, async function (val, cb) {
-            const scheduledPost = await UserSMOPost.findAll({where: {is_posted: 0 }})
-            async.eachSeries(scheduledPost, async function (postValue, cb2) {
-                console.log("postValue.user_id", val.user_id, postValue.user_id);
-                let instaSMOPostObj = {};
-                const ig = new IgApiClient();
-                ig.state.generateDevice(val.insta_username);
-                await ig.account.login(val.insta_username, val.insta_password).then(async (dataA) => {
-                    if(postValue.media_file) {      
-                        let filePath = env.IMAGEBASEPATH + 'smo/' + postValue.media_file;
-                        const imageBuffer = fs.readFileSync(filePath);
-                        const dimensions = sizeOf(filePath)
-                        let sourceObj = {
-                            uploadOptions: {
-                                width: dimensions.width,
-                                height: dimensions.height,
-                                isSidecar: false
-                            }
+        async.forEachSeries(credentialsPost, async (val, callback) => {
+            const scheduledPost = await UserSMOPost.findAll({where: {is_posted: 0, user_id: val.user_id }})
+            async.forEachSeries(scheduledPost, async (postValue, callback2) => {
+                console.log("postValue.user_id****", val.user_id, postValue.user_id);
+                if(val.user_id === postValue.user_id){
+                    //Run crone after check current date time
+                    let d = new Date();
+                    const today = d.getDate()
+                    const hours = today.getHours()
+                    let n = d.getTime() / 1000;
+                    const toDayDate = postValue.schedule_date.split('-')
+                    if(toDayDate[0] == today && hours >= postValue.schedule_time ) {
+                        if(postValue.post_type == 1){
+
+                        } else if(postValue.post_type == 2){
+                            let instaSMOPostObj = {};
+                            const ig = new IgApiClient();
+                            ig.state.generateDevice(val.insta_username);
+                            await ig.account.login(val.insta_username, val.insta_password).then(async (dataA) => {
+                                let publishResult;
+                                if(postValue.media_file) {
+                                    let filePath = env.IMAGEBASEPATH + 'smo/' + postValue.media_file;
+                                    const imageBuffer = fs.readFileSync(filePath);
+                                    let sourceObj = {
+                                        uploadOptions: {
+                                            isSidecar: false
+                                        }
+                                    }
+                                    if(postValue.mediaSource === 'image') {
+                                        const dimensions = sizeOf(filePath)
+                                        sourceObj.uploadOptions.width = dimensions.width;
+                                        sourceObj.uploadOptions.height = dimensions.height;
+                                        sourceObj.file = imageBuffer;
+                                        if(postValue.caption){
+                                            sourceObj.caption = postValue.caption
+                                        }
+                                        publishResult = await ig.publish.photo(sourceObj);
+                                        console.log('Post published:', publishResult);
+                                    } else if(postValue.mediaSource === 'video') {
+                                        sourceObj.uploadOptions.width = 1080;
+                                        sourceObj.uploadOptions.height = 566;
+                                        sourceObj.video = imageBuffer;
+                                        if(postValue.caption){
+                                            sourceObj.caption = postValue.caption
+                                        }
+                                        publishResult = await ig.publish.video(sourceObj);
+                                        console.log('Post published:', publishResult);
+                                    }
+                                    // instaSMOPostObj.mediaSource = postValue.mediaSource;
+                                } else if(!postValue.mediaSource && postValue.caption){
+                                    publishResult = await ig.publish.caption(postValue.caption);
+                                    console.log('Post published:', publishResult);
+                                }
+                                if(publishResult.media && publishResult.media.id){
+                                    instaSMOPostObj.post_id = publishResult.media.id;
+                                    instaSMOPostObj.is_posted = 1;
+                                    try {
+                                        UserSMOPost.update(instaSMOPostObj, { where: { id: postValue.id }})
+                                        callback2(null, 'Successfully Posted');
+                                    } catch (error) {
+                                        callback2(error, null);
+                                    }
+                                } else {
+                                    callback2(publishResult, null);
+                                }
+                            }).catch ((error) =>{
+                                console.log(error)
+                                callback2(error, null);
+                            })
                         }
-                        if(postValue.caption){
-                            sourceObj.caption = postValue.caption
-                        }
-                        
-                        instaSMOPostObj.mediaSource = postValue.mediaSource;
                     }
-                    let publishResult;
-                    if(postValue.mediaSource){
-                        if(postValue.mediaSource === 'image') {
-                            sourceObj.file = imageBuffer;
-                            publishResult = await ig.publish.photo(sourceObj);
-                            console.log('Post published:', publishResult);
-                        } else if(postValue.mediaSource === 'video') {
-                            sourceObj.video = imageBuffer;
-                            publishResult = await ig.publish.video(sourceObj);
-                            console.log('Post published:', publishResult);
-                        }
-                    } else if(postValue.caption) {;
-                        publishResult = await ig.publish.caption(caption);
-                        console.log('Post published:', publishResult);
-                    }
-                    if(publishResult.media && publishResult.media.id){
-                        instaSMOPostObj.post_id = publishResult.media.id;
-                        instaSMOPostObj.is_posted = 1;
-                        try {
-                            UserSMOPost.update(instaSMOPostObj, { where: { id: postValue.id }})
-                        } catch (error) {
-                            cb2;
-                        }
-                    } else {
-                        cb2;
-                    }
-                }).catch ((error) =>{
-                    console.log(error)
-                    cb2;
-                })
-            }, async function (error, result) {
+                }
+            }, function (error, result) {
                 if (error) {
-                    cb;
+                    callback(error, null);
                 } else {
-                    cb;
+                    callback(null, result);
                 }
             });
-        }, async function (error, result) {
+        }, function (error, result) {
             if (error) {
               res.status(400);
               res.json({ replyCode: 'error', replyMsg: error });
             } else {
+                console.log('Smo Cronjob result-------', result)
                 res.status(201);
-                res.json({ replyMsg: 'Successfully Posted!', replyCode: 'success' });
+                res.json({ replyCode: 'success', replyMsg: 'Successfully Posted!' });
             }
         });
     } catch (error) {
         res.status(400);
         res.json({ replyCode: 'error', replyMsg: error.message });
     }
+}
+
+const fileOperation = async function(reqFile){
+    const fileSMOPostObj = {};
+    const filePath = reqFile.file.path;
+    const mimeType = reqFile.file.type
+    const filetype = mimeType.split('/')
+    
+    fileSMOPostObj.mediaSource = filetype[0];
+    //Resize Image
+    if(filetype[0] === 'image'){
+        //Check Image size
+        const dimensions = sizeOf(filePath)
+        console.log(dimensions)
+        const imageSize = `${dimensions.width}x${dimensions.height}`;
+        const standardImageSize = ['1080x1080','1080x566', '566x1080']
+        
+        if(!standardImageSize.includes(imageSize)){
+            if(dimensions.width > dimensions.height){
+                // width = 1080;
+                // height = 566;
+                fileSMOPostObj.width = 1080;
+                fileSMOPostObj.height = 566;
+            } else if (dimensions.width < dimensions.height){
+                // width = 566;
+                // height = 1080;
+                fileSMOPostObj.width = 566;
+                fileSMOPostObj.height = 1080;
+            }
+        }
+    }
+    filenamesave = FUNCTIONS.uploadImageWithoutCallback(reqFile.file, env.SOCIALIMAGEUPLAODPATH);
+    if (filenamesave[1]) {
+        userErrorMessage = filenamesave[1];
+        userErrorStatus = true;
+    } else {
+        fileSMOPostObj.media_file = 'resized-' + filenamesave[0];
+        const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
+        const images = await Jimp.read(file_Path);                                    
+        images.resize(fileSMOPostObj.width, fileSMOPostObj.height, Jimp.RESIZE_BEZIER, function (errs, resp) {
+            if (errs) {
+                res.status(400);    
+                res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
+            }
+        }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
+        fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
+    }
+    return fileSMOPostObj;
+} 
+
+const instaFilePost = async function(){
+    const imageBuffer = fs.readFileSync(newFilePath);
+    let sourceObj = {
+        uploadOptions: {
+            isSidecar: false
+        }
+    }
+    if(postValue.mediaSource === 'image') {
+        const dimensions = sizeOf(newFilePath)
+        sourceObj.uploadOptions.width = dimensions.width;
+        sourceObj.uploadOptions.height = dimensions.height;
+        sourceObj.file = imageBuffer;
+        if(postValue.caption){
+            sourceObj.caption = postValue.caption
+        }
+        publishResult = await ig.publish.photo(sourceObj);
+        console.log('Post published:', publishResult);
+    } else if(postValue.mediaSource === 'video') {
+        sourceObj.uploadOptions.width = 1080;
+        sourceObj.uploadOptions.height = 566;
+        sourceObj.video = imageBuffer;
+        if(postValue.caption){
+            sourceObj.caption = postValue.caption
+        }
+        publishResult = await ig.publish.video(sourceObj);
+        console.log('Post published:', publishResult);
+    }
+    
+    return {sourceObj, publishResult};
+}
+
+const getDateTime = function(date){
+    var today = new Date();
+    var dd = today.getDate();
+    var mm = today.getMonth() + 1;
+    var yyyy = today.getFullYear();
+    if (dd < 10) {
+        dd = '0' + dd;
+    }
+    if (mm < 10) {
+        mm = '0' + mm;
+    }
+    today = dd + '-' + mm + '-' + yyyy;
+    console.log(today);
 }
