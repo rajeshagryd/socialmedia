@@ -792,6 +792,7 @@ exports.getFilteredPost = async function(req, res) {
 exports.updateSinglePost = async function(req, res) {
     const requestData = req.body;
     console.log(req.params);
+    console.log(requestData);
     var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
     await FUNCTIONS.DATA_WRITE(req);
     try {
@@ -799,7 +800,8 @@ exports.updateSinglePost = async function(req, res) {
         }).then(data => {
             if(data.status == 1){
                 console.log("111111111");
-                
+                const returnData = reSchedulePost(requestData)
+                console.log("returnData------", returnData);
             } else{
                 console.log("22222222222");
             }
@@ -832,24 +834,14 @@ exports.updateSinglePost = async function(req, res) {
 }
 
 
-const reSchedulePost = function(requestData){
-    // let instaSMOPostObj = {
-    //     caption : requestData.caption,
-    //     user_id: userdetails.id,
-    //     post_type : requestData.post_type,
-    //     is_posted: 0,
-    //     schedule_date: requestData.schedule_date,
-    //     schedule_time: requestData.schedule_time
-    // }
-    if(req.files.file != 'undefined' && req.files.file != "" && req.files.file != null && req.files.file.name != '') {
-        // const returnFileData = fileOperation(req.files)
-        // instaSMOPostObj.mediaSource = returnFileData.mediaSource
+const reSchedulePost = async function(requestData){
+    console.log(requestData)
+    if(requestData.file != 'undefined' && requestData.file != "" && requestData.file != null && requestData.file.name != '') {
+        console.log("Image receive****");
 
-        const filePath = req.files.file.path;
-        const mimeType = req.files.file.type
+        const filePath = requestData.file.path;
+        const mimeType = requestData.file.type
         const filetype = mimeType.split('/')
-        
-        
         //Resize Image
         let width;
         let height;
@@ -873,44 +865,34 @@ const reSchedulePost = function(requestData){
                 }
             }
         }
-        const filenamesave = FUNCTIONS.uploadImageWithoutCallback(req.files.file, env.SOCIALIMAGEUPLAODPATH);
+        const filenamesave = FUNCTIONS.uploadImageWithoutCallback(requestData.file, env.SOCIALIMAGEUPLAODPATH);
         if (filenamesave[1]) {
             userErrorMessage = filenamesave[1];
-            // userErrorStatus = true;
-            res.status(400);
-            res.json({ replyCode: 'error', replyMsg: userErrorMessage });
+            return {error:'error', replyMsg: 'file upload error'}  
         } else {
-            instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
+            requestData.media_file = 'resized-' + filenamesave[0];
             const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
             const images = await Jimp.read(file_Path);                                    
             images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
                 if (errs) {
-                    res.status(400);    
-                    res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
+                    return {error:errs, replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio'}  
+                    // res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
                 }
             }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
             fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
+            fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + requestData.oldFileName);
         }
     }
-    try {
-        console.log('instaSMOPostObj*****', instaSMOPostObj)
-        //MongoDB Connection
-        // await db.mongoc.connect();
-        // var dbo = db.mongoc.db("fareboutique");
-        // dbo.collection("user_smo_post").insertOne(instaSMOPostObj, function(err, res) {
-        //     if (err) throw err;
-        //     console.log("1 document inserted");
-        //     dbo.close();
-        // });  
+    return requestData; 
+    // try {
 
-
-        await UserSMOPost.create(instaSMOPostObj)
-        res.status(201);
-        res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
-    } catch (error) {
-        res.status(400);
-        res.json({ replyCode: 'error', replyMsg: error.message });
-    }   
+    //     await UserSMOPost.create(requestData)
+    //     res.status(201);
+    //     res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
+    // } catch (error) {
+    //     res.status(400);
+    //     res.json({ replyCode: 'error', replyMsg: error.message });
+    // } 
 }
 
 const getDateTime = function(){
