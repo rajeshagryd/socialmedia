@@ -1,4 +1,3 @@
-
 exports.addUserSMO = async function (req, res) {
     let requestData = req.body;
     var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
@@ -16,7 +15,6 @@ exports.addUserSMO = async function (req, res) {
                   replyMsg: LANGTEXT.USERNOTFOUND,
                 })
               } else {
-                requestData.status = 1;
                 if(requestData.acc_type === 1){
                     if (!requestData.app_Id || requestData.app_Id === '') {
                         res.status(400);
@@ -25,15 +23,15 @@ exports.addUserSMO = async function (req, res) {
                     else if (!requestData.app_Secret || requestData.app_Secret === '') {
                         res.status(400);
                         res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
-                    }            
-                    else if (!requestData.redirect_uri || requestData.redirect_uri === '') {
-                        res.status(400);
-                        res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
                     }           
-                    else if (!requestData.pageId || requestData.pageId === '') {
+                    else if (!requestData.page_id || requestData.page_id === '') {
                         res.status(400);
                         res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
-                    }            
+                    } else if(!requestData.access_token || requestData.access_token === '') {
+                        res.status(400);
+                        res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
+                    }
+                    requestData.access_token_date = new Date()
                 } else if (requestData.acc_type === 2) {
                     if (!requestData.insta_username || requestData.insta_username === '') {
                         res.status(400);
@@ -46,6 +44,7 @@ exports.addUserSMO = async function (req, res) {
                 }
                 try {
                     requestData.user_id = userdetails.id
+                    requestData.status = 1;
                     await UserSMOSettings.create(requestData)
                     .then(data => {
                         res.status(201);
@@ -95,11 +94,10 @@ exports.addUserSMO = async function (req, res) {
 
 exports.instantPostOnSocialMedia = async function (req, res) {
     var requestData = req.body;
-    var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
-
-    await FUNCTIONS.DATA_WRITE(req);
-    //console.log(requestData);
-    const userSettingsObj = {}
+    console.log("requestData==", requestData)
+    // var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
+    var userdetails = requestData.user_id; // Remove this
+    // await FUNCTIONS.DATA_WRITE(req);
     if (requestData == undefined) {
         res.status(400);
         res.json({ replyMsg: LANGTEXT.REQUIRED_DATA, replyCode: 'error'});
@@ -113,80 +111,74 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                 })
               } else {
                 if(requestData.acc_type === 1){
-                    const appId = 'YOUR_APP_ID';
-                    const appSecret = 'YOUR_APP_SECRET';
-                    const redirectUri = 'YOUR_REDIRECT_URI';
-                    const code = 'CODE_RECEIVED_FROM_FACEBOOK';
-                    
-                    await axios.get(`https://graph.facebook.com/v13.0/oauth/access_token?client_id=${appId}&redirect_uri=${redirectUri}&client_secret=${appSecret}&code=${code}`)
-                    .then(async (userAccessTokenResponse) => {
-                        const userAccessToken = userAccessTokenResponse.data.access_token;
-                        console.log(userAccessToken);
+                    UserSMOSettings.findOne({where:{status:1,user_id:userdetails.id},
+                        attributes: ['insta_username', 'insta_password']}).then(async data => {
+                        console.log("data---", data);
+                        try {
+                            const appId = data.app_id;
+                            const appSecret = data.app_secret;
+                            const access_token = data.access_token;
+                            
+                            
 
-                        const pageId = req.body.page_Id;
 
-                        await axios.get(`https://graph.facebook.com/${pageId}?fields=access_token&access_token=${userAccessToken}`)
-                        .then(async (pageAccessTokenResponse) => {
-                            const pageAccessToken = pageAccessTokenResponse.data.access_token;
-                            let fbSMOSettingObj = {
-                                code : code,
-                                userAccessToken : userAccessToken,
-                                pageAccessToken : pageAccessToken
-                            }
+
                             let fbSMOPostObj = {
-                                caption : req.body.caption,
-                                user_id: req.body.user_id,
-                                page_id: req.body.page_id,
-                                post_type : req.body.post_type,
+                                user_id: requestData.user_id,
+                                page_id: requestData.page_id,
+                                post_type : requestData.post_type,
                                 status: 1,
+                            }
+                            if (fbSMOPostObj.caption) {
+                                fbSMOPostObj.caption = requestData.caption
                             }
 
                             let mediaObj = {
-                                access_token: pageAccessToken
+                                access_token : access_token
+                            }
+                            let mediaSource;
+                            if(req.files.file != 'undefined' && req.files.file != "" && req.files.file != null && req.files.file.name != '') {
+                                console.log("Image receive****");
+                        
+                                // const filePath = req.files.file.path;
+                                const mimeType = req.files.file.type;
+                                const filetype = mimeType.split('/')
+                                
+                                const filenamesave = FUNCTIONS.uploadImageWithoutCallback(req.files.file, env.SOCIALIMAGEUPLAODPATH);
+                                if (filenamesave[1]) {
+                                    userErrorMessage = true;
+                                } else {
+                                    fbSMOPostObj.media_file = 'resized-' + filenamesave[0];
+                                    if(filetype[0] == 'videos'){
+                                        mediaSource = 'videos'
+                                        mediaObj.file_url = env.IMAGEBASEPATH + 'smo/' + filenamesave[0] 
+                                        if(req.body.caption) {
+                                            mediaObj.description = requestData.caption
+                                        }
+                                    } else if(filetype[0] == 'image'){
+                                        mediaSource = 'photos'
+                                        mediaObj.url = env.IMAGEBASEPATH + 'smo/' + filenamesave[0] 
+                                        if(req.body.caption) {
+                                            mediaObj.caption = requestData.caption
+                                        }
+                                    }  else {
+                                        mediaObj.message = requestData.caption
+                                        mediaSource = 'feed'
+                                    }
+                                }
                             }
 
-                            let mediaSource = ''
-                            if(req.body.videoUrl){
-                                mediaSource = 'videos'
-                                
-                                mediaObj.file_url = req.body.videoUrl
-                                fbSMOPostObj.video = req.body.videoUrl
-                                if(req.body.caption) {
-                                    mediaObj.description = req.body.caption
-                                }
-                            } else if(req.body.image){
-                                mediaSource = 'photos'
-                                mediaObj.url = req.body.image;
-                                fbSMOPostObj = req.body.image;
-                                if(req.body.caption) {
-                                    mediaObj.caption = req.body.caption
-                                }
-                            } else {
-                                mediaObj.message = req.body.caption
-                                mediaSource = 'feed'
-                            }
                             fbSMOPostObj.mediaSource = mediaSource;
-                            await axios.post(`https://graph.facebook.com/v19.0/246095668596270/${mediaSource}`, mediaObj)
-                            .then(async function (postResponse) {
-                                if (postResponse) {
+                            await axios.post(`https://graph.facebook.com/v19.0/${page_id}/${mediaSource}`, mediaObj)
+                            .then(async function (fbPostResponse) {
+                                console.log(fbPostResponse)
+                                if (fbPostResponse) {
                                     try {
-                                        await UserSMOSettings.update({appId:appId},fbSMOSettingObj)
-                                        if(SettingResult){
-                                            try {
-                                                await UserSMOPost.create(fbSMOPostObj)
-                                                res.status(201);
-                                                res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });                                    
-                                            } catch (error) {
-                                                var errorMessage = error.errors;
-                                                var errorITem = [];
-                                                errorMessage.forEach((item) => {
-                                                    console.log('ID: ' + item.message);
-                                                    errorITem.push({ "field": item.path, "message": item.message });
-                                                });
-                                                res.status(400);
-                                                res.json({ replyCode: 'error', replyMsg: errorITem });
-                                            }
-                                        }
+                                        // await UserSMOSettings.update({appId:appId},fbSMOSettingObj)
+                                        
+                                        await UserSMOPost.create(fbSMOPostObj)
+                                        res.status(201);
+                                        res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
                                     } catch (error) {
                                         var errorMessage = error.errors;
                                         var errorITem = [];
@@ -212,33 +204,21 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                                 res.status(400);
                                 res.json({ replyCode: 'error', replyMsg: errorITem });
                             });
-
-                            // res.status(200).json({pageAccessToken: pageAccessToken});
-                        })
-                        .catch((error) => {
-                            var errorMessage = error.errors;
-                            var errorITem = [];
-                            errorMessage.forEach((item) => {
-                                console.log('ID: ' + item.message);
-                                errorITem.push({ "field": item.path, "message": item.message });
-                            });
+                        } catch (error) {
                             res.status(400);
-                            res.json({ replyCode: 'error', replyMsg: errorITem });
-                        });
-                    })
-                    .catch((error) => {
-                        var errorMessage = error.errors;
-                        var errorITem = [];
-                        errorMessage.forEach((item) => {
-                            console.log('ID: ' + item.message);
-                            errorITem.push({ "field": item.path, "message": item.message });
-                        });
+                            res.json({ replyCode: 'error', replyMsg: error.message });
+                        }
+                    }).catch(err => {
                         res.status(400);
-                        res.json({ replyCode: 'error', replyMsg: errorITem });
+                        res.json({
+                            replyCode: 'error',
+                            replyMsg:LANGTEXT.DATABASECONNECTIONERROR
+                        });
                     });
                 } else if (requestData.acc_type === '2') {
                     UserSMOSettings.findOne({where:{status:1,user_id:userdetails.id},
                         attributes: ['insta_username', 'insta_password']}).then(async data => {
+                            console.log("data---", data);
                         try {
                             let instaSMOPostObj = {
                                 caption : requestData.caption,
@@ -287,7 +267,20 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                                         // userErrorStatus = true;
                                         res.status(400);
                                         res.json({ replyCode: 'error', replyMsg: userErrorMessage });
-                                    } 
+                                    } else { 
+                                        instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
+                                        const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
+                                        console.log(width, height);
+                                        const images = await Jimp.read(file_Path);
+                                        images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
+                                            if (errs) {
+                                                res.status(400);
+                                                res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
+                                            }
+                                        }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
+                                        
+                                        fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
+                                    }
                                     instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
                                     const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
                                     const images = await Jimp.read(file_Path);
@@ -300,6 +293,7 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                                     let sourceObj = {
                                         uploadOptions: {
                                             isSidecar: false
+                                        }
                                     }
                                     if(instaSMOPostObj.mediaSource === 'image') {
                                         const dimensions = sizeOf(instaSMOPostObj.newFilePath)
@@ -358,7 +352,7 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                             replyCode: 'error',
                             replyMsg:LANGTEXT.DATABASECONNECTIONERROR
                         });
-                    });       
+                    });
                 }
             }
         } catch(error) {
@@ -532,7 +526,7 @@ exports.smoPostCron = async function (req, res) {
                     const hours = d.getHours();
                     const scheduledHour = postValue.schedule_time.split(':')
                      
-                    const todayDate = getDateTime();
+                    const todayDate = getTodayDateTime();
                     // const scheduledDate = postValue.schedule_date.split('-');
                     // const todayDate = `${d.getDate()}-${d.getMonth()}-${d.getFullYear()}`
                     console.log(postValue.schedule_date, todayDate, hours , Number(scheduledHour[0]));
@@ -655,7 +649,7 @@ exports.deletePost = async function (req, res) {
                             const deletePost = await ig.media.delete({ mediaId: requestData.post_id });
                             console.log(deletePost);
                             if(deletePost.did_delete && deletePost.did_delete === true){
-                                UserSMOPost.update({status: 0}, { where: { post_id: requestData.post_id }})
+                                await UserSMOPost.update({status: 0}, { where: { post_id: requestData.post_id }})
                                 .then(data => {
                                     console.log(data)
                                     res.status(201);
@@ -753,7 +747,9 @@ exports.getFilteredPost = async function(req, res) {
             }
         }
         // const data = await UserSMOPost.findAll({ where: searchObj });
-        await UserSMOPost.findAll({where: searchObj
+        // res.status(200);
+        // res.json({ replyMsg: 'Data successfully Fetched!', replyCode: 'success', data: data });
+        UserSMOPost.findAll({where: searchObj
         }).then(data => {
             res.status(200);
             res.json({ replyMsg: 'Data successfully Fetched!', replyCode: 'success', data: data });
@@ -904,7 +900,6 @@ const reSchedulePostImage = async function(requestData){
         } else {
             requestData.media_file = 'resized-' + filenamesave[0];
             const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
-            requestData.media_file = `resized-${filenamesave[0]}`
             const images = await Jimp.read(file_Path);
             images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
                 if (errs) {
@@ -921,7 +916,25 @@ const reSchedulePostImage = async function(requestData){
     return requestData;
 }
 
-const getDateTime = function(){
+
+const extendToken = async function(requestData) {
+    const appId = requestData.appId;
+    const appSecret = requestData.appSecret;
+    const shortLivedToken = requestData.access_token;
+
+    axios.get(`https://graph.facebook.com/v13.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`)
+    .then(response => {
+        const longLivedToken = response.data.access_token;
+        console.log('Long-lived Token:', longLivedToken);
+        return longLivedToken
+    })
+    .catch(error => {
+        console.error('Error extending access token:', error.response.data);
+        return error
+    });
+}
+
+const getTodayDateTime = function(){
     var today = new Date();
     var dd = today.getDate();
     var mm = today.getMonth() + 1;
@@ -938,23 +951,21 @@ const getDateTime = function(){
 }
 
 
-/*
-exports.extendToken = async function(req, res) {
-    const requestData = req.bodyl;
-    const appId = requestData.appId;
-    const appSecret = requestData.appSecret;
-    const shortLivedToken = requestData.access_token;
+const calculateDate = async function(tokenDate){
+    var today = new Date();
+    var dd = today.getDate();
+    var mm = today.getMonth() + 1;
+    var yyyy = today.getFullYear();
+    if (dd < 10) {
+        dd = '0' + dd;
+    }
+    if (mm < 10) {
+        mm = '0' + mm;
+    }
+    return `${dd}-${mm}-${yyyy}`
+}
 
-    axios.get(`https://graph.facebook.com/v13.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`)
-    .then(response => {
-        const longLivedToken = response.data.access_token;
-        console.log('Long-lived Token:', longLivedToken);
-    })
-    .catch(error => {
-        console.error('Error extending access token:', error.response.data);
-    });
-} 
-*/
+
 
 const fileOperation = async function(reqFile){
     const fileSMOPostObj = {};
