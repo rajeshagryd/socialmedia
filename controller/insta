@@ -711,7 +711,8 @@ exports.getAllPost = async function(req, res) {
     var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
     await FUNCTIONS.DATA_WRITE(req);
     try {
-        UserSMOPost.findAll({where:{status:1,user_id:userdetails.id}
+        // const data = await UserSMOPost.findAll({ where: {status:1,user_id:userdetails.id} });
+        await UserSMOPost.findAll({where:{status:1,user_id:userdetails.id}
         }).then(data => {
             res.status(200);
             res.json({ replyMsg: 'Data successfully Fetched!', replyCode: 'success', data: data });
@@ -751,7 +752,8 @@ exports.getFilteredPost = async function(req, res) {
                 [Op.between]: [req.query.from, req.query.to]
             }
         }
-        UserSMOPost.findAll({where: searchObj
+        // const data = await UserSMOPost.findAll({ where: searchObj });
+        await UserSMOPost.findAll({where: searchObj
         }).then(data => {
             res.status(200);
             res.json({ replyMsg: 'Data successfully Fetched!', replyCode: 'success', data: data });
@@ -788,7 +790,7 @@ exports.updateSinglePost = async function(req, res) {
     var userdetails = await GlobalService.getUserDetails(req.headers['authorization']);
     await FUNCTIONS.DATA_WRITE(req);
     try {
-        UserSMOPost.findOne({where: {id:req.params.id}
+        await UserSMOPost.findOne({where: {id:req.params.id}
         }).then(data => {
             if(data.status == 1){
                 console.log("111111111");
