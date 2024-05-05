@@ -287,27 +287,19 @@ exports.instantPostOnSocialMedia = async function (req, res) {
                                         // userErrorStatus = true;
                                         res.status(400);
                                         res.json({ replyCode: 'error', replyMsg: userErrorMessage });
-                                    } else { 
-                                        instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
-                                        const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
-                                        console.log(width, height);
-                                        const images = await Jimp.read(file_Path);
-                                        images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
-                                            if (errs) {
-                                                res.status(400);
-                                                res.json({ replyCode: 'error', replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio' });
-                                            }
-                                        }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
-                                        
-                                        fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
-                                    }
-                                    const newFilePath = env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]
-                                    // const instaFilePost = instaFilePostFunc(newFilePath)
+                                    } 
+                                    instaSMOPostObj.media_file = 'resized-' + filenamesave[0];
+                                    const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
+                                    const images = await Jimp.read(file_Path);
+                                    images.resize(width, height).write(env.IMAGEBASEPATH + 'smo/resized-' + filenamesave[0]);
+
+                                    fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
+
+                                    const newFilePath = env.IMAGEBASEPATH + 'smo/resized-' + filenamesave[0];
                                     const imageBuffer = fs.readFileSync(newFilePath);
                                     let sourceObj = {
                                         uploadOptions: {
                                             isSidecar: false
-                                        }
                                     }
                                     if(instaSMOPostObj.mediaSource === 'image') {
                                         const dimensions = sizeOf(instaSMOPostObj.newFilePath)
