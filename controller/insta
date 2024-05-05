@@ -791,13 +791,50 @@ exports.updateSinglePost = async function(req, res) {
     await FUNCTIONS.DATA_WRITE(req);
     try {
         await UserSMOPost.findOne({where: {id:req.params.id}
-        }).then(data => {
+        }).then(async data => {
+            requestData.postData = data;
             if(data.status == 1){
-                console.log("111111111");
-                const returnData = reSchedulePost(requestData)
-                console.log("returnData------", returnData);
+                if (requestData.post_type == 2) {
+                    console.log("111111111");
+                    let returnData;
+                    if (req.files.file) {
+                        requestData.file = req.files.file;
+                        returnData = reSchedulePostImage(requestData)
+                        console.log("returnData------", returnData);
+                    }
+                    try {
+                        const dataToSave = {
+                            
+                        }
+                        await UserSMOPost.create(dataToSave)
+                        res.status(201);
+                        res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
+                    } catch (error) {
+                        res.status(400);
+                        res.json({ replyCode: 'error', replyMsg: error.message });
+                    }
+                }
             } else{
-                console.log("22222222222");
+                if (requestData.post_type == 2) {
+                    console.log("22222222222");
+                    if (req.files.file) {
+                        requestData.file = req.files.file;
+                        const returnData = reSchedulePostImage(requestData)
+                        console.log("returnData------", returnData);
+                    }
+                    
+                    try {
+                        const dataToSave = {
+                            
+                        }
+                        await UserSMOPost.create(dataToSave)
+                        res.status(201);
+                        res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
+                    } catch (error) {
+                        res.status(400);
+                        res.json({ replyCode: 'error', replyMsg: error.message });
+                    }
+                }
             }
             res.status(200);
             res.json({ replyMsg: 'Data successfully Fetched!', replyCode: 'success', data: data });
@@ -828,14 +865,15 @@ exports.updateSinglePost = async function(req, res) {
 }
 
 
-const reSchedulePost = async function(requestData){
+const reSchedulePostImage = async function(requestData){
     console.log(requestData)
     if(requestData.file != 'undefined' && requestData.file != "" && requestData.file != null && requestData.file.name != '') {
         console.log("Image receive****");
 
         const filePath = requestData.file.path;
-        const mimeType = requestData.file.type
+        const mimeType = requestData.file.type;
         const filetype = mimeType.split('/')
+        requestData.mediaSource = filetype[0]
         //Resize Image
         let width;
         let height;
@@ -866,7 +904,8 @@ const reSchedulePost = async function(requestData){
         } else {
             requestData.media_file = 'resized-' + filenamesave[0];
             const file_Path = env.IMAGEBASEPATH + 'smo/' + filenamesave[0];
-            const images = await Jimp.read(file_Path);                                    
+            requestData.media_file = `resized-${filenamesave[0]}`
+            const images = await Jimp.read(file_Path);
             images.resize(width, height, Jimp.RESIZE_BEZIER, function (errs, resp) {
                 if (errs) {
                     return {error:errs, replyMsg: 'Image dimentions should be in 1080x1080,1080x566, 566x1080 ratio'}  
@@ -874,19 +913,12 @@ const reSchedulePost = async function(requestData){
                 }
             }).write(env.IMAGEBASEPATH + 'smo/resized-'+ filenamesave[0]);
             fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + filenamesave[0]);
-            fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + requestData.oldFileName);
+            if(requestData.postData.media_file){
+                fs.unlinkSync(env.IMAGEBASEPATH + 'smo/' + requestData.postData.media_file);
+            }
         }
-    }
-    return requestData; 
-    // try {
-
-    //     await UserSMOPost.create(requestData)
-    //     res.status(201);
-    //     res.json({ replyMsg: 'Data successfully inserted!', replyCode: 'success', data: data });
-    // } catch (error) {
-    //     res.status(400);
-    //     res.json({ replyCode: 'error', replyMsg: error.message });
-    // } 
+    } 
+    return requestData;
 }
 
 const getDateTime = function(){
