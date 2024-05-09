@@ -32,12 +32,52 @@ async function postToFacebookPage(message) {
         throw error;
     }
 }
-
 // Example usage
 const message = 'Hello, Facebook World! ram';
-postToFacebookPage(message)
-    .then(() => console.log('Message posted to Facebook page!'))
-    .catch(error => console.error('Failed to post to Facebook:', error));
+// postToFacebookPage(message)
+    // .then(() => console.log('Message posted to Facebook page!'))
+    // .catch(error => console.error('Failed to post to Facebook:', error));
+
+
+//============Instagram API=========
+
+async function instagramPost(message) {
+    const access_token = "EAAPp4TFQKyUBO01bCoznYhbUdSBmLWjnopNCyeKdzNSCKXZCedSrqPdr6el3uKQ5fHKXoiVLbBYeO2QxUAPJKJWZAeNMU6uy6RZCGwZAIkvjZAHZCFZBrBoy8hlYPXMqEuHsqeP2Cvdj5eoBBuZApg2tc0ziaIZAC9Txx2MvkZBhTLSDV7ezkDCV1XE2B9j9EIIGnpHoO0CSTT"
+    const ig_user_id = "17841403285826638"
+    try {
+        const response = await axios.post(
+            `https://graph.facebook.com/${API_VERSION}/${ig_user_id}/media`,
+            {
+                caption: message,
+                access_token: PAGE_ACCESS_TOKEN,
+                image_url: "https://www.copahost.com/blog/wp-content/uploads/2019/07/imgsize2.png"
+            }
+        );
+
+        console.log('Instagram Post successful:', response.data);
+        if (response.data.id) {
+            const response_two = await axios.post(
+                `https://graph.facebook.com/${API_VERSION}/${ig_user_id}/media_publish`,
+                {
+                    creation_id: response.data.id,
+                    access_token: PAGE_ACCESS_TOKEN,
+                }
+            );
+            console.log(response_two);
+            return response_two.data;
+        } else {
+            return "not post on instgram";
+        }
+    } catch (error) {
+        console.error('Error posting to Facebook:', error.response.data.error);
+        throw error;
+    }
+}
+
+const instaMessage = 'Hello, Facebook World! ram';
+instagramPost(instaMessage)
+.then(() => console.log('Message posted to Facebook page!'))
+.catch(error => console.error('Failed to post to Facebook:', error));
 
 
 
