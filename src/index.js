@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000
 
 const axios = require('axios');
 
-const PAGE_ACCESS_TOKEN = 'EAAPp4TFQKyUBO4oQoWwbpR2TfAc3H7E0XpNkJktG5nNES2o0kg90LiasBSE7DHY5n9UDLMjFpQkvb8DgEqYj2raDYnw4qMJegeLFZCcJuE8CNQQhy0TMglKCER0exua2h952RcZA8R5eowrTB2XgVYUFf1QNNZAgOee0QfoizYVZBArzG2HQiYX6mZAdRvJZBU2qlOtON2Fm0vy8TE';
+const PAGE_ACCESS_TOKEN = 'EAAPp4TFQKyUBOZCqps2L6sxZCC5EXZASooZB13ZAzxRZCiDc4O8hxVeQyIrw8ykxZAZBvZAVhgqW9LNb6KpJKRFVqoNnLBZA19SY7C1rw4E0GdAaJOi598vTCMlUD4ZBGMmYR5Nfqae9K6Alc0spKN4CS7ZAVtvcH7mgk3N7W8pwWwbxHW2BALRzfHA9mJDufpkX8bZCe5zRjXfcS';
 const PAGE_ID = "303635619493795";
 const API_VERSION = 'v19.0'; // Facebook Graph API version
 
@@ -42,14 +42,14 @@ const message = 'Hello, Facebook World! ram';
 //============Instagram API=========
 
 async function instagramPost(message) {
-    const access_token = "EAAPp4TFQKyUBO01bCoznYhbUdSBmLWjnopNCyeKdzNSCKXZCedSrqPdr6el3uKQ5fHKXoiVLbBYeO2QxUAPJKJWZAeNMU6uy6RZCGwZAIkvjZAHZCFZBrBoy8hlYPXMqEuHsqeP2Cvdj5eoBBuZApg2tc0ziaIZAC9Txx2MvkZBhTLSDV7ezkDCV1XE2B9j9EIIGnpHoO0CSTT"
+    const access_token = "EAAGulyXa9wEBO3QLwJUd0Okcyqy6a8QrTGVIAlLVOQvnhsCfZCmdZBjOYYLlDPIlnnMAPB5wjfd0O3CnyBd34bQvb4S7UE5HlpPMc8NkKd2W9ZBgaXGTjXAA8r6dV0ZAFFkhfdS5oyoKl7A7ZAECGpNWNlmVyQxYy4e1LyGM5B1zZCaDHP6gw0QPyYnkUhvax6R5LDddN1"
     const ig_user_id = "17841403285826638"
     try {
         const response = await axios.post(
             `https://graph.facebook.com/${API_VERSION}/${ig_user_id}/media`,
             {
                 caption: message,
-                access_token: PAGE_ACCESS_TOKEN,
+                access_token: access_token,
                 image_url: "https://www.copahost.com/blog/wp-content/uploads/2019/07/imgsize2.png"
             }
         );
